@@ -284,7 +284,8 @@ async fn main() -> Result<()> {
         })
         .request_handler("tools/list", {
             let tools = tools_arc.clone();
-            move |_req: ListRequest| {
+            // MCP clients may omit params entirely when listing tools.
+            move |_req: Option<ListRequest>| {
                 let tools = tools.clone();
                 Box::pin(async move {
                     Ok(ToolsListResponse {
