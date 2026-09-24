@@ -7,7 +7,6 @@ use async_mcp::types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::env;
 use std::fs;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -48,16 +47,13 @@ struct AppConfig {
 
 fn get_config_path() -> std::path::PathBuf {
     if let Some(mut home) = dirs::home_dir() {
+        home.push(".config");
         home.push("speak-mcp");
         home.push("config.json");
         return home;
     }
-    // Fallback
-    let mut config_path = env::current_exe()
-        .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or_default())
-        .unwrap_or_default();
-    config_path.push("config.json");
-    config_path
+
+    std::path::PathBuf::from(".config/speak-mcp/config.json")
 }
 
 fn load_config() -> AppConfig {
@@ -65,20 +61,6 @@ fn load_config() -> AppConfig {
     if let Ok(content) = fs::read_to_string(&path) {
         if let Ok(config) = serde_json::from_str(&content) {
             return config;
-        }
-    }
-
-    // Fallback check for local config if home one failed or didn't exist
-    let mut local_path = env::current_exe()
-        .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or_default())
-        .unwrap_or_default();
-    local_path.push("config.json");
-
-    if path != local_path {
-        if let Ok(content) = fs::read_to_string(&local_path) {
-            if let Ok(config) = serde_json::from_str(&content) {
-                return config;
-            }
         }
     }
 

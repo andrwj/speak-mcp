@@ -1,7 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use slint::{Model, SharedString, VecModel};
-use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -36,11 +35,9 @@ struct AppState {
 }
 
 fn get_config_path() -> PathBuf {
-    // Priority: ~/speak-mcp/config.json
     if let Some(mut home) = dirs::home_dir() {
+        home.push(".config");
         home.push("speak-mcp");
-        // Ensure directory exists if we are going to write (though get_path is simple getter)
-        // We will handle directory creation in save if needed, but here just return path.
         if !home.exists() {
             let _ = std::fs::create_dir_all(&home);
         }
@@ -48,11 +45,7 @@ fn get_config_path() -> PathBuf {
         return home;
     }
 
-    let mut exe_path = env::current_exe()
-        .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or_default())
-        .unwrap_or_default();
-    exe_path.push("config.json");
-    exe_path
+    PathBuf::from(".config/speak-mcp/config.json")
 }
 
 fn load_config() -> AppConfig {
@@ -66,13 +59,6 @@ fn load_config() -> AppConfig {
         }
     } else {
         println!("Config file not found or unreadable at {:?}", path);
-        // Fallback: Try current directory
-        if let Ok(cwd_content) = fs::read_to_string("config.json") {
-            if let Ok(config) = serde_json::from_str(&cwd_content) {
-                println!("Config loaded from CWD: {:?}", config);
-                return config;
-            }
-        }
     }
     println!("Using default config");
     AppConfig::default()
