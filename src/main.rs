@@ -1,6 +1,5 @@
 use anyhow::Result;
 use async_mcp::server::Server;
-use async_mcp::transport::ServerStdioTransport;
 use async_mcp::types::{
     CallToolRequest, CallToolResponse, ListRequest, ServerCapabilities, Tool, ToolResponseContent,
     ToolsListResponse,
@@ -9,8 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::Arc;
+
+mod stdio;
+#[cfg(target_os = "macos")]
+mod speech_queue;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SpeakArgs {
@@ -222,7 +225,7 @@ async fn call_voicevox_compatible(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let transport = ServerStdioTransport;
+    let transport = stdio::StdioTransport::new();
     let config = load_config();
 
     // Fetch speakers at startup
@@ -257,7 +260,7 @@ async fn main() -> Result<()> {
     {
         tools.push(Tool {
             name: "speak".to_string(),
-            description: Some("Mac標準のsayコマンドで読み上げます。".to_string()),
+            description: Some("Queue speech using macOS say. Returns immediately after acceptance, before playback finishes. Jobs play sequentially in FIFO order.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -274,6 +277,9 @@ async fn main() -> Result<()> {
     // Share tools and config across handlers
     let tools_arc = Arc::new(tools);
     let config_arc = Arc::new(config);
+
+    #[cfg(target_os = "macos")]
+    let (speech_queue, stop_speech, speech_worker) = speech_queue::SpeechQueue::start();
 
     let builder = Server::builder(transport)
         .name("speak-mcp")
@@ -300,6 +306,8 @@ async fn main() -> Result<()> {
             let config = config_arc.clone();
             move |req: CallToolRequest| {
                 let config = config.clone();
+                #[cfg(target_os = "macos")]
+                let speech_queue = speech_queue.clone();
                 Box::pin(async move {
                     match req.name.as_str() {
                         "speak_voicevox" => {
@@ -315,30 +323,17 @@ async fn main() -> Result<()> {
                             let args_map = req
                                 .arguments
                                 .ok_or_else(|| anyhow::anyhow!("Arguments missing"))?;
-                            let args: SpeakArgs = serde_json::from_value(serde_json::to_value(args_map)?)?;
+                            let mut args: SpeakArgs = serde_json::from_value(serde_json::to_value(args_map)?)?;
                             let current_config = load_config();
-
-                            let mut cmd = Command::new("say");
-                            cmd.arg(&args.text);
-
-                            if let Some(v) = args.voice.or(current_config.macos_default_voice) {
-                                cmd.arg("-v").arg(v);
-                            }
-                            if let Some(s) = args.speed {
-                                cmd.arg("-r").arg(s.to_string());
-                            }
-                            let status = cmd.status()?;
-                            if status.success() {
-                                Ok(CallToolResponse {
-                                    content: vec![ToolResponseContent::Text {
-                                        text: "Macのsayで読み上げたよ！🎵".to_string(),
-                                    }],
-                                    is_error: Some(false),
-                                    meta: None,
-                                })
-                            } else {
-                                Err(anyhow::anyhow!("sayコマンド失敗💦"))
-                            }
+                            args.voice = args.voice.or(current_config.macos_default_voice);
+                            let id = speech_queue.enqueue(args)?;
+                            Ok(CallToolResponse {
+                                content: vec![ToolResponseContent::Text {
+                                    text: json!({"status": "queued", "job_id": id}).to_string(),
+                                }],
+                                is_error: Some(false),
+                                meta: None,
+                            })
                         }
                         _ => Err(anyhow::anyhow!("Unknown tool: {}", req.name)),
                     }
@@ -348,7 +343,13 @@ async fn main() -> Result<()> {
 
     let server = builder.build();
     eprintln!("Speak MCP Server (Multi-Engine) starting...");
-    server.listen().await?;
+    let result = server.listen().await;
+    #[cfg(target_os = "macos")]
+    {
+        let _ = stop_speech.send(());
+        speech_worker.await?;
+    }
+    result?;
 
     Ok(())
 }
