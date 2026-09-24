@@ -5,6 +5,8 @@
 set -e
 
 INSTALL_DIR="$HOME/speak-mcp"
+CONFIG_DIR="$HOME/.config/speak-mcp"
+CONFIG_PATH="$CONFIG_DIR/config.json"
 BINARY_NAME="speak-mcp"
 BINARY_PATH="$INSTALL_DIR/$BINARY_NAME"
 
@@ -81,9 +83,10 @@ if [ -d "./setup" ]; then
 fi
 
 # config.json (do not overwrite existing config)
-if [ ! -f "$INSTALL_DIR/config.json" ]; then
+mkdir -p "$CONFIG_DIR"
+if [ ! -f "$CONFIG_PATH" ]; then
     echo "[INFO] Creating default config.json..."
-    cat > "$INSTALL_DIR/config.json" <<EOF
+    cat > "$CONFIG_PATH" <<EOF
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
@@ -97,138 +100,21 @@ echo "[OK] Files installed to: $INSTALL_DIR"
 echo ""
 
 # ------------------------------------------
-# 3. Auto-configure MCP clients
+# 3. MCP client configuration
 # ------------------------------------------
-configure_json_file() {
-    local config_file="$1"
-    local label="$2"
-
-    if [ ! -f "$config_file" ]; then
-        mkdir -p "$(dirname "$config_file")"
-        echo '{"mcpServers": {}}' > "$config_file"
-    fi
-
-    if grep -q '"speak"' "$config_file" 2>/dev/null; then
-        echo "[SKIP] $label: 'speak' is already configured."
-        return
-    fi
-
-    python3 - "$config_file" "$BINARY_PATH" <<'PYEOF'
-import json, sys
-path, binary = sys.argv[1], sys.argv[2]
-with open(path, 'r') as f:
-    data = json.load(f)
-data.setdefault('mcpServers', {})
-data['mcpServers']['speak'] = {'command': binary}
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-    f.write('\n')
-PYEOF
-    echo "[OK] $label: Configuration updated."
-}
-
-ask_and_configure() {
-    local config_file="$1"
-    local label="$2"
-    local extra_note="${3:-}"
-
-    echo "--------------------------------------"
-    echo "[$label] detected."
-    echo "  Config file: $config_file"
-    [ -n "$extra_note" ] && echo "  $extra_note"
-    printf "  Auto-configure speak-mcp? [y/N]: "
-    read -r answer
-    case "$answer" in
-        [yY]*)
-            configure_json_file "$config_file" "$label"
-            ;;
-        *)
-            echo "[SKIP] Skipped."
-            ;;
-    esac
-    echo ""
-}
-
 echo "======================================"
-echo " MCP Client Auto-Configuration"
+echo " MCP Client Configuration"
 echo "======================================"
 echo ""
-
-CONFIGURED_ANY=false
-
-# --- Claude Desktop ---
-CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-if [ -d "$HOME/Library/Application Support/Claude" ] || [ -f "$CLAUDE_DESKTOP_CONFIG" ]; then
-    CONFIGURED_ANY=true
-    ask_and_configure "$CLAUDE_DESKTOP_CONFIG" "Claude Desktop" \
-        "Please restart Claude Desktop after configuration."
-fi
-
-# --- Claude Code ---
-CLAUDE_CODE_CONFIG="$HOME/.claude/settings.json"
-if [ -d "$HOME/.claude" ] || [ -f "$CLAUDE_CODE_CONFIG" ]; then
-    CONFIGURED_ANY=true
-    ask_and_configure "$CLAUDE_CODE_CONFIG" "Claude Code" \
-        "Also check your project's .mcp.json after configuration."
-    echo "  [NOTE] Claude Code may also require the following in settings.json:"
-    echo "    \"enabledMcpjsonServers\": [\"speak\"]"
-    echo ""
-fi
-
-# --- Antigravity ---
-ANTIGRAVITY_CONFIG="$HOME/Library/Application Support/Antigravity/config.json"
-if [ -d "$HOME/Library/Application Support/Antigravity" ] || [ -f "$ANTIGRAVITY_CONFIG" ]; then
-    CONFIGURED_ANY=true
-    ask_and_configure "$ANTIGRAVITY_CONFIG" "Google Antigravity" \
-        "Please restart Antigravity after configuration."
-fi
-
-# --- LM Studio ---
-LMSTUDIO_MCP_DIR="$HOME/.lmstudio/extensions/plugins/mcp/speak"
-LMSTUDIO_MCP_JSON="$LMSTUDIO_MCP_DIR/mcp.json"
-if [ -d "$HOME/.lmstudio" ]; then
-    CONFIGURED_ANY=true
-    echo "--------------------------------------"
-    echo "[LM Studio] detected."
-    echo "  Install path: $LMSTUDIO_MCP_DIR"
-    echo "  The binary will be copied and an mcp.json will be generated."
-    printf "  Configure speak-mcp for LM Studio? [y/N]: "
-    read -r answer
-    case "$answer" in
-        [yY]*)
-            mkdir -p "$LMSTUDIO_MCP_DIR"
-            cp "$BINARY_PATH" "$LMSTUDIO_MCP_DIR/"
-            chmod +x "$LMSTUDIO_MCP_DIR/$BINARY_NAME"
-            cat > "$LMSTUDIO_MCP_JSON" <<EOF
-{
-  "name": "speak",
-  "version": "0.1.0",
-  "description": "Text-to-speech MCP server (VOICEVOX / Aivis Speech / macOS say)",
-  "command": "$LMSTUDIO_MCP_DIR/$BINARY_NAME"
-}
-EOF
-            echo "[OK] LM Studio: Installed to $LMSTUDIO_MCP_DIR"
-            echo "  Please restart LM Studio and enable the MCP plugin."
-            ;;
-        *)
-            echo "[SKIP] Skipped."
-            ;;
-    esac
-    echo ""
-fi
-
-# --- No clients detected ---
-if [ "$CONFIGURED_ANY" = false ]; then
-    echo "[INFO] No MCP clients detected."
-    echo "  Please manually add the following to your client's config file:"
-    echo ""
-    echo '  "mcpServers": {'
-    echo '    "speak": {'
-    echo "      \"command\": \"$BINARY_PATH\""
-    echo '    }'
-    echo '  }'
-    echo ""
-fi
+echo "[INFO] This installer does not modify MCP client or agent configuration files."
+echo "  Register speak-mcp manually in the MCP client you want to use:"
+echo ""
+echo '  "mcpServers": {'
+echo '    "speak": {'
+echo "      \"command\": \"$BINARY_PATH\""
+echo '    }'
+echo '  }'
+echo ""
 
 # ------------------------------------------
 # 4. Done
@@ -238,7 +124,7 @@ echo " Installation complete!"
 echo "======================================"
 echo ""
 echo "Binary : $BINARY_PATH"
-echo "Config : $INSTALL_DIR/config.json"
+echo "Config : $CONFIG_PATH"
 if [ -d "$INSTALL_DIR/SpeakConfig.app" ]; then
     echo ""
     echo "To change the default voice, open SpeakConfig.app:"
