@@ -260,7 +260,7 @@ async fn main() -> Result<()> {
     {
         tools.push(Tool {
             name: "speak".to_string(),
-            description: Some("Queue speech using macOS say. Returns immediately after acceptance, before playback finishes. Jobs play sequentially in FIFO order.".to_string()),
+            description: Some("Use when the user wants to hear a response spoken aloud. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
             input_schema: json!({
                 "type": "object",
                 "properties": {
