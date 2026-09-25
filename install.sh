@@ -1,10 +1,13 @@
 #!/bin/bash
+# This installer is intentionally disabled. Installation and MCP client configuration
+# must be performed explicitly by the user, not by this repository script.
+: <<'INSTALL_DISABLED'
 # ==========================================
 # speak-mcp Installer (English)
 # ==========================================
 set -e
 
-INSTALL_DIR="$HOME/speak-mcp"
+INSTALL_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/speak-mcp"
 CONFIG_PATH="$CONFIG_DIR/config.json"
 BINARY_NAME="speak-mcp"
@@ -90,7 +93,10 @@ if [ ! -f "$CONFIG_PATH" ]; then
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
-  "macos_default_voice": null
+  "en_US": "Nathan (Enhanced)",
+  "en_AU": "Karen (Premium)",
+  "en_UK": "Jamie (Enhanced)",
+  "ko_KR": "Yuna (Premium)"
 }
 EOF
 fi
@@ -131,3 +137,4 @@ if [ -d "$INSTALL_DIR/SpeakConfig.app" ]; then
     echo "  open \"$INSTALL_DIR/SpeakConfig.app\""
 fi
 echo ""
+INSTALL_DISABLED
