@@ -290,70 +290,64 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "macos")]
     let (speech_queue, stop_speech, speech_worker) = speech_queue::SpeechQueue::start();
 
-    let builder =
-        Server::builder(transport)
-            .name("speak-mcp")
-            .version("0.1.0")
-            .capabilities(ServerCapabilities {
-                tools: Some(json!({})),
-                ..Default::default()
-            })
-            .request_handler("tools/list", {
-                let tools = tools_arc.clone();
-                // MCP clients may omit params entirely when listing tools.
-                move |_req: Option<ListRequest>| {
-                    let tools = tools.clone();
-                    Box::pin(async move {
-                        Ok(ToolsListResponse {
-                            tools: tools.as_ref().clone(),
-                            next_cursor: None,
-                            meta: None,
-                        })
+    let builder = Server::builder(transport)
+        .name("speak-mcp")
+        .version("0.1.0")
+        .capabilities(ServerCapabilities {
+            tools: Some(json!({})),
+            ..Default::default()
+        })
+        .request_handler("tools/list", {
+            let tools = tools_arc.clone();
+            // MCP clients may omit params entirely when listing tools.
+            move |_req: Option<ListRequest>| {
+                let tools = tools.clone();
+                Box::pin(async move {
+                    Ok(ToolsListResponse {
+                        tools: tools.as_ref().clone(),
+                        next_cursor: None,
+                        meta: None,
                     })
-                }
-            })
-            .request_handler("tools/call", {
-                let config = config_arc.clone();
-                move |req: CallToolRequest| {
-                    let config = config.clone();
-                    #[cfg(target_os = "macos")]
-                    let speech_queue = speech_queue.clone();
-                    Box::pin(async move {
-                        match req.name.as_str() {
-                            "speak_voicevox" => {
-                                let default = config.voicevox_default_speaker;
-                                call_voicevox_compatible(50021, req, default).await
-                            }
-                            "speak_aivis" => {
-                                let default = config.aivis_default_speaker;
-                                call_voicevox_compatible(10101, req, default).await
-                            }
-                            #[cfg(target_os = "macos")]
-                            "speak" => {
-                                let args_map = req
-                                    .arguments
-                                    .ok_or_else(|| anyhow::anyhow!("Arguments missing"))?;
-                                let args: SpeakArgs =
-                                    serde_json::from_value(serde_json::to_value(args_map)?)?;
-                                let current_config = load_config();
-                                let voice =
-                                    current_config.voice_for_locale(&args.locale).ok_or_else(
-                                        || anyhow::anyhow!("Unsupported locale: {}", args.locale),
-                                    )?;
-                                let id = speech_queue.enqueue(args, voice.to_string())?;
-                                Ok(CallToolResponse {
-                                    content: vec![ToolResponseContent::Text {
-                                        text: json!({"status": "queued", "job_id": id}).to_string(),
-                                    }],
-                                    is_error: Some(false),
-                                    meta: None,
-                                })
-                            }
-                            _ => Err(anyhow::anyhow!("Unknown tool: {}", req.name)),
+                })
+            }
+        })
+        .request_handler("tools/call", {
+            let config = config_arc.clone();
+            move |req: CallToolRequest| {
+                let config = config.clone();
+                #[cfg(target_os = "macos")]
+                let speech_queue = speech_queue.clone();
+                Box::pin(async move {
+                    match req.name.as_str() {
+                        "speak_voicevox" => {
+                            let default = config.voicevox_default_speaker;
+                            call_voicevox_compatible(50021, req, default).await
                         }
-                    })
-                }
-            });
+                        "speak_aivis" => {
+                            let default = config.aivis_default_speaker;
+                            call_voicevox_compatible(10101, req, default).await
+                        }
+                        #[cfg(target_os = "macos")]
+                        "speak" => {
+                            let args_map = req
+                                .arguments
+                                .ok_or_else(|| anyhow::anyhow!("Arguments missing"))?;
+                            let args: SpeakArgs =
+                                serde_json::from_value(serde_json::to_value(args_map)?)?;
+                            let id = speech_queue.enqueue(args)?;
+                            Ok(CallToolResponse {
+                                content: vec![ToolResponseContent::Text {
+                                    text: json!({"status": "queued", "job_id": id}).to_string(),
+                                }],
+                                is_error: Some(false),
+                                meta: None,
+                            })
+                        }
+                        _ => Err(anyhow::anyhow!("Unknown tool: {}", req.name)),
+                    }
+                })
+            }
+        });
 
     let server = builder.build();
     eprintln!("Speak MCP Server (Multi-Engine) starting...");

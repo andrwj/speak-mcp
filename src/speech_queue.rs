@@ -13,7 +13,6 @@ const CAPACITY: usize = 64;
 struct Job {
     id: u64,
     args: super::SpeakArgs,
-    voice: String,
 }
 
 #[derive(Clone)]
@@ -27,6 +26,7 @@ impl SpeechQueue {
         let (sender, mut receiver) = mpsc::channel::<Job>(CAPACITY);
         let (stop, mut stopping) = oneshot::channel();
         let worker = tokio::spawn(async move {
+            let mut config = None;
             loop {
                 let job = tokio::select! {
                     biased;
@@ -36,13 +36,27 @@ impl SpeechQueue {
                         None => break,
                     },
                 };
+                let current = config.get_or_insert_with(super::load_config);
+                let voice = current
+                    .voice_for_locale(&job.args.locale)
+                    .filter(|v| !v.trim().is_empty());
+                let Some(voice) = voice else {
+                    eprintln!(
+                        "Speech job {} failed: no voice configured for {}",
+                        job.id, job.args.locale
+                    );
+                    if receiver.is_empty() {
+                        config = None;
+                    }
+                    continue;
+                };
                 let mut command = Command::new("say");
                 command
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
                     .stderr(Stdio::inherit())
                     .kill_on_drop(true);
-                command.arg("-v").arg(job.voice);
+                command.arg("-v").arg(voice);
                 if let Some(speed) = job.args.speed {
                     command.arg("-r").arg(speed.to_string());
                 }
@@ -66,6 +80,10 @@ impl SpeechQueue {
                     }
                     Err(error) => eprintln!("Speech job {} failed to start: {}", job.id, error),
                 }
+                // A drained queue ends this configuration snapshot's lifetime.
+                if receiver.is_empty() {
+                    config = None;
+                }
             }
         });
         (
@@ -78,7 +96,10 @@ impl SpeechQueue {
         )
     }
 
-    pub fn enqueue(&self, args: super::SpeakArgs, voice: String) -> Result<u64> {
+    pub fn enqueue(&self, args: super::SpeakArgs) -> Result<u64> {
+        if args.locale.trim().is_empty() {
+            bail!("Speech locale must not be empty");
+        }
         if args.text.trim().is_empty() {
             bail!("Speech text must not be empty");
         }
@@ -87,7 +108,7 @@ impl SpeechQueue {
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.sender
-            .try_send(Job { id, args, voice })
+            .try_send(Job { id, args })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => anyhow::anyhow!("Speech queue is full"),
                 mpsc::error::TrySendError::Closed(_) => anyhow::anyhow!("Speech queue is closed"),
