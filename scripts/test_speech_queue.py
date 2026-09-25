@@ -27,9 +27,20 @@ record('start')
 time.sleep(30 if sys.argv[-1] == 'hold' else 0.4)
 record('end')
 sys.exit(1 if sys.argv[-1] == 'fail' else 0)
-''')
+    ''')
     fake.chmod(0o755)
+    config_dir = root / '.config' / 'speak-mcp'
+    config_dir.mkdir(parents=True)
+    (config_dir / 'config.json').write_text(json.dumps({
+        'voicevox_default_speaker': None,
+        'aivis_default_speaker': None,
+        'en_US': 'Nathan (Enhanced)',
+        'en_AU': 'Karen (Premium)',
+        'en_UK': 'Jamie (Enhanced)',
+        'ko_KR': 'Yuna (Premium)',
+    }))
     env = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'], SPEECH_TEST_LOG=str(log))
+    env['HOME'] = directory
     p = subprocess.Popen([binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, env=env, bufsize=0)
     sequence = 0
@@ -68,13 +79,19 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
             'clientInfo': {'name': 'queue-test', 'version': '1'},
         })
         send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-        assert 'result' in request('tools/list')  # Regression: omitted params.
+        tools_response = request('tools/list')  # Regression: omitted params.
+        assert 'result' in tools_response
+        speak_tool = next(tool for tool in tools_response['result']['tools'] if tool['name'] == 'speak')
+        schema = speak_tool['inputSchema']
+        assert schema['required'] == ['text', 'locale']
+        assert schema['properties']['locale']['enum'] == ['en_US', 'en_AU', 'en_UK', 'ko_KR']
+        assert 'voice' not in schema['properties']
         for params in ({}, {'cursor': 'test'}):
             assert 'result' in request('tools/list', params)
 
         ids = []
         for text in ('first', 'fail', 'last'):
-            response = speak(text, voice='Karen', speed=180)
+            response = speak(text, locale='en_AU', speed=180)
             accepted = json.loads(response['result']['content'][0]['text'])
             assert accepted['status'] == 'queued', response
             ids.append(accepted['job_id'])
@@ -84,16 +101,28 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
         assert [(e['event'], e['text']) for e in events()] == [
             (event, text) for text in ('first', 'fail', 'last') for event in ('start', 'end')
         ], events()
-        assert events()[0]['args'] == ['-v', 'Karen', '-r', '180', '--', 'first']
-        assert 'error' in speak('   ')
-        assert 'error' in speak('invalid speed', speed=0)
+        assert events()[0]['args'] == ['-v', 'Karen (Premium)', '-r', '180', '--', 'first']
+        for locale, voice in {
+            'en_US': 'Nathan (Enhanced)',
+            'en_AU': 'Karen (Premium)',
+            'en_UK': 'Jamie (Enhanced)',
+            'ko_KR': 'Yuna (Premium)',
+        }.items():
+            assert 'result' in speak(f'locale-{locale}', locale=locale)
+            wait_for(lambda: any(e['event'] == 'start' and e['text'] == f'locale-{locale}' for e in events()))
+            event = next(e for e in events() if e['event'] == 'start' and e['text'] == f'locale-{locale}')
+            assert event['args'] == ['-v', voice, '--', f'locale-{locale}']
+        assert 'error' in speak('missing locale')
+        assert 'error' in speak('unsupported locale', locale='ja_JP')
+        assert 'error' in speak('   ', locale='en_US')
+        assert 'error' in speak('invalid speed', locale='en_US', speed=0)
 
-        assert 'result' in speak('hold')
+        assert 'result' in speak('hold', locale='en_US')
         wait_for(lambda: any(e['text'] == 'hold' for e in events()))
         child_pid = events()[-1]['pid']
         for i in range(64):
-            assert 'result' in speak(f'pending-{i}')
-        response = speak('overflow')
+            assert 'result' in speak(f'pending-{i}', locale='en_US')
+        response = speak('overflow', locale='en_US')
         assert 'queue is full' in response['error']['message'], response
         # Closing stdin must stop the active child and discard pending jobs.
         p.stdin.close()

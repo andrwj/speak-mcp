@@ -21,11 +21,47 @@ struct SpeakerInfo {
     styles: Vec<StyleInfo>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct AppConfig {
     voicevox_default_speaker: Option<u32>,
     aivis_default_speaker: Option<u32>,
-    macos_default_voice: Option<String>,
+    #[serde(rename = "en_US", default = "default_en_us_voice")]
+    en_us: String,
+    #[serde(rename = "en_AU", default = "default_en_au_voice")]
+    en_au: String,
+    #[serde(rename = "en_UK", default = "default_en_uk_voice")]
+    en_uk: String,
+    #[serde(rename = "ko_KR", default = "default_ko_kr_voice")]
+    ko_kr: String,
+}
+
+fn default_en_us_voice() -> String {
+    "Nathan (Enhanced)".to_string()
+}
+
+fn default_en_au_voice() -> String {
+    "Karen (Premium)".to_string()
+}
+
+fn default_en_uk_voice() -> String {
+    "Jamie (Enhanced)".to_string()
+}
+
+fn default_ko_kr_voice() -> String {
+    "Yuna (Premium)".to_string()
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            voicevox_default_speaker: None,
+            aivis_default_speaker: None,
+            en_us: default_en_us_voice(),
+            en_au: default_en_au_voice(),
+            en_uk: default_en_uk_voice(),
+            ko_kr: default_ko_kr_voice(),
+        }
+    }
 }
 
 struct AppState {

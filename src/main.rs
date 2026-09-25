@@ -11,14 +11,14 @@ use std::io::Write;
 use std::process::Command;
 use std::sync::Arc;
 
-mod stdio;
 #[cfg(target_os = "macos")]
 mod speech_queue;
+mod stdio;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SpeakArgs {
     text: String,
-    voice: Option<String>,
+    locale: String,
     speed: Option<u32>,
 }
 
@@ -41,11 +41,59 @@ struct SpeakerInfo {
     styles: Vec<StyleInfo>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize)]
 struct AppConfig {
     voicevox_default_speaker: Option<u32>,
     aivis_default_speaker: Option<u32>,
-    macos_default_voice: Option<String>,
+    #[serde(rename = "en_US", default = "default_en_us_voice")]
+    en_us: String,
+    #[serde(rename = "en_AU", default = "default_en_au_voice")]
+    en_au: String,
+    #[serde(rename = "en_UK", default = "default_en_uk_voice")]
+    en_uk: String,
+    #[serde(rename = "ko_KR", default = "default_ko_kr_voice")]
+    ko_kr: String,
+}
+
+fn default_en_us_voice() -> String {
+    "Nathan (Enhanced)".to_string()
+}
+
+fn default_en_au_voice() -> String {
+    "Karen (Premium)".to_string()
+}
+
+fn default_en_uk_voice() -> String {
+    "Jamie (Enhanced)".to_string()
+}
+
+fn default_ko_kr_voice() -> String {
+    "Yuna (Premium)".to_string()
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            voicevox_default_speaker: None,
+            aivis_default_speaker: None,
+            en_us: default_en_us_voice(),
+            en_au: default_en_au_voice(),
+            en_uk: default_en_uk_voice(),
+            ko_kr: default_ko_kr_voice(),
+        }
+    }
+}
+
+impl AppConfig {
+    fn voice_for_locale(&self, locale: &str) -> Option<&str> {
+        match locale {
+            "en_US" => Some(&self.en_us),
+            "en_AU" => Some(&self.en_au),
+            "en_UK" => Some(&self.en_uk),
+            "ko_KR" => Some(&self.ko_kr),
+            _ => None,
+        }
+    }
 }
 
 fn get_config_path() -> std::path::PathBuf {
@@ -163,13 +211,15 @@ async fn play_wav(wav_data: &[u8]) -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        let script = format!("export XDG_RUNTIME_DIR=/run/user/1000; pw-play '{}' || aplay -q '{}'", path, path);
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(script)
-            .output()?;
+        let script = format!(
+            "export XDG_RUNTIME_DIR=/run/user/1000; pw-play '{}' || aplay -q '{}'",
+            path, path
+        );
+        let output = Command::new("sh").arg("-c").arg(script).output()?;
         if !output.status.success() {
-            return Err(anyhow::anyhow!("Linux playback failed: pw-play and aplay both failed."));
+            return Err(anyhow::anyhow!(
+                "Linux playback failed: pw-play and aplay both failed."
+            ));
         }
     }
 
@@ -260,15 +310,18 @@ async fn main() -> Result<()> {
     {
         tools.push(Tool {
             name: "speak".to_string(),
-            description: Some("Use when the user wants to hear a response spoken aloud. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
+                description: Some("Use when the user wants to hear a response spoken aloud. `locale` is required: choose exactly one of `en_US`, `en_AU`, `en_UK`, or `ko_KR` to match the response language. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
             input_schema: json!({
                 "type": "object",
-                "properties": {
-                    "text": { "type": "string" },
-                    "voice": { "type": "string" },
-                    "speed": { "type": "integer" }
-                },
-                "required": ["text"]
+                    "properties": {
+                        "text": { "type": "string" },
+                        "locale": {
+                            "type": "string",
+                            "enum": ["en_US", "en_AU", "en_UK", "ko_KR"]
+                        },
+                        "speed": { "type": "integer" }
+                    },
+                    "required": ["text", "locale"]
             }),
             output_schema: None,
         });
@@ -281,65 +334,70 @@ async fn main() -> Result<()> {
     #[cfg(target_os = "macos")]
     let (speech_queue, stop_speech, speech_worker) = speech_queue::SpeechQueue::start();
 
-    let builder = Server::builder(transport)
-        .name("speak-mcp")
-        .version("0.1.0")
-        .capabilities(ServerCapabilities {
-            tools: Some(json!({})),
-            ..Default::default()
-        })
-        .request_handler("tools/list", {
-            let tools = tools_arc.clone();
-            // MCP clients may omit params entirely when listing tools.
-            move |_req: Option<ListRequest>| {
-                let tools = tools.clone();
-                Box::pin(async move {
-                    Ok(ToolsListResponse {
-                        tools: tools.as_ref().clone(),
-                        next_cursor: None,
-                        meta: None,
+    let builder =
+        Server::builder(transport)
+            .name("speak-mcp")
+            .version("0.1.0")
+            .capabilities(ServerCapabilities {
+                tools: Some(json!({})),
+                ..Default::default()
+            })
+            .request_handler("tools/list", {
+                let tools = tools_arc.clone();
+                // MCP clients may omit params entirely when listing tools.
+                move |_req: Option<ListRequest>| {
+                    let tools = tools.clone();
+                    Box::pin(async move {
+                        Ok(ToolsListResponse {
+                            tools: tools.as_ref().clone(),
+                            next_cursor: None,
+                            meta: None,
+                        })
                     })
-                })
-            }
-        })
-        .request_handler("tools/call", {
-            let config = config_arc.clone();
-            move |req: CallToolRequest| {
-                let config = config.clone();
-                #[cfg(target_os = "macos")]
-                let speech_queue = speech_queue.clone();
-                Box::pin(async move {
-                    match req.name.as_str() {
-                        "speak_voicevox" => {
-                            let default = config.voicevox_default_speaker;
-                            call_voicevox_compatible(50021, req, default).await
+                }
+            })
+            .request_handler("tools/call", {
+                let config = config_arc.clone();
+                move |req: CallToolRequest| {
+                    let config = config.clone();
+                    #[cfg(target_os = "macos")]
+                    let speech_queue = speech_queue.clone();
+                    Box::pin(async move {
+                        match req.name.as_str() {
+                            "speak_voicevox" => {
+                                let default = config.voicevox_default_speaker;
+                                call_voicevox_compatible(50021, req, default).await
+                            }
+                            "speak_aivis" => {
+                                let default = config.aivis_default_speaker;
+                                call_voicevox_compatible(10101, req, default).await
+                            }
+                            #[cfg(target_os = "macos")]
+                            "speak" => {
+                                let args_map = req
+                                    .arguments
+                                    .ok_or_else(|| anyhow::anyhow!("Arguments missing"))?;
+                                let args: SpeakArgs =
+                                    serde_json::from_value(serde_json::to_value(args_map)?)?;
+                                let current_config = load_config();
+                                let voice =
+                                    current_config.voice_for_locale(&args.locale).ok_or_else(
+                                        || anyhow::anyhow!("Unsupported locale: {}", args.locale),
+                                    )?;
+                                let id = speech_queue.enqueue(args, voice.to_string())?;
+                                Ok(CallToolResponse {
+                                    content: vec![ToolResponseContent::Text {
+                                        text: json!({"status": "queued", "job_id": id}).to_string(),
+                                    }],
+                                    is_error: Some(false),
+                                    meta: None,
+                                })
+                            }
+                            _ => Err(anyhow::anyhow!("Unknown tool: {}", req.name)),
                         }
-                        "speak_aivis" => {
-                            let default = config.aivis_default_speaker;
-                            call_voicevox_compatible(10101, req, default).await
-                        }
-                        #[cfg(target_os = "macos")]
-                        "speak" => {
-                            let args_map = req
-                                .arguments
-                                .ok_or_else(|| anyhow::anyhow!("Arguments missing"))?;
-                            let mut args: SpeakArgs = serde_json::from_value(serde_json::to_value(args_map)?)?;
-                            let current_config = load_config();
-                            args.voice = args.voice.or(current_config.macos_default_voice);
-                            let id = speech_queue.enqueue(args)?;
-                            Ok(CallToolResponse {
-                                content: vec![ToolResponseContent::Text {
-                                    text: json!({"status": "queued", "job_id": id}).to_string(),
-                                }],
-                                is_error: Some(false),
-                                meta: None,
-                            })
-                        }
-                        _ => Err(anyhow::anyhow!("Unknown tool: {}", req.name)),
-                    }
-                })
-            }
-        });
+                    })
+                }
+            });
 
     let server = builder.build();
     eprintln!("Speak MCP Server (Multi-Engine) starting...");

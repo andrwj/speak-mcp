@@ -13,6 +13,7 @@ const CAPACITY: usize = 64;
 struct Job {
     id: u64,
     args: super::SpeakArgs,
+    voice: String,
 }
 
 #[derive(Clone)]
@@ -41,9 +42,7 @@ impl SpeechQueue {
                     .stdout(Stdio::null())
                     .stderr(Stdio::inherit())
                     .kill_on_drop(true);
-                if let Some(voice) = job.args.voice {
-                    command.arg("-v").arg(voice);
-                }
+                command.arg("-v").arg(job.voice);
                 if let Some(speed) = job.args.speed {
                     command.arg("-r").arg(speed.to_string());
                 }
@@ -79,19 +78,16 @@ impl SpeechQueue {
         )
     }
 
-    pub fn enqueue(&self, args: super::SpeakArgs) -> Result<u64> {
+    pub fn enqueue(&self, args: super::SpeakArgs, voice: String) -> Result<u64> {
         if args.text.trim().is_empty() {
             bail!("Speech text must not be empty");
         }
         if args.speed == Some(0) {
             bail!("Speech speed must be greater than zero");
         }
-        if args.voice.as_ref().is_some_and(|v| v.trim().is_empty()) {
-            bail!("Speech voice must not be empty");
-        }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.sender
-            .try_send(Job { id, args })
+            .try_send(Job { id, args, voice })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => anyhow::anyhow!("Speech queue is full"),
                 mpsc::error::TrySendError::Closed(_) => anyhow::anyhow!("Speech queue is closed"),
