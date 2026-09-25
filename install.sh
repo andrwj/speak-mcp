@@ -93,10 +93,12 @@ if [ ! -f "$CONFIG_PATH" ]; then
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
-  "en_US": "Nathan (Enhanced)",
-  "en_AU": "Karen (Premium)",
-  "en_UK": "Jamie (Enhanced)",
-  "ko_KR": "Yuna (Premium)"
+  "locale": {
+    "en_US": "Nathan (Enhanced)",
+    "en_AU": "Karen (Premium)",
+    "en_UK": "Jamie (Enhanced)",
+    "ko_KR": "Yuna (Premium)"
+  }
 }
 EOF
 fi

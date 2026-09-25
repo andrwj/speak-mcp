@@ -34,10 +34,13 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
     (config_dir / 'config.json').write_text(json.dumps({
         'voicevox_default_speaker': None,
         'aivis_default_speaker': None,
-        'en_US': 'Nathan (Enhanced)',
-        'en_AU': 'Karen (Premium)',
-        'en_UK': 'Jamie (Enhanced)',
-        'ko_KR': 'Yuna (Premium)',
+        'locale': {
+            'en_US': 'Nathan (Enhanced)',
+            'en_AU': 'Karen (Premium)',
+            'en_UK': 'Jamie (Enhanced)',
+            'ko_KR': 'Yuna (Premium)',
+            'ja_JP': 'Custom Japanese Voice',
+        },
     }))
     env = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'], SPEECH_TEST_LOG=str(log))
     env['HOME'] = directory
@@ -84,7 +87,7 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
         speak_tool = next(tool for tool in tools_response['result']['tools'] if tool['name'] == 'speak')
         schema = speak_tool['inputSchema']
         assert schema['required'] == ['text', 'locale']
-        assert schema['properties']['locale']['enum'] == ['en_US', 'en_AU', 'en_UK', 'ko_KR']
+        assert schema['properties']['locale'] == {'type': 'string'}
         assert 'voice' not in schema['properties']
         for params in ({}, {'cursor': 'test'}):
             assert 'result' in request('tools/list', params)
@@ -107,13 +110,14 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
             'en_AU': 'Karen (Premium)',
             'en_UK': 'Jamie (Enhanced)',
             'ko_KR': 'Yuna (Premium)',
+            'ja_JP': 'Custom Japanese Voice',
         }.items():
             assert 'result' in speak(f'locale-{locale}', locale=locale)
             wait_for(lambda: any(e['event'] == 'start' and e['text'] == f'locale-{locale}' for e in events()))
             event = next(e for e in events() if e['event'] == 'start' and e['text'] == f'locale-{locale}')
             assert event['args'] == ['-v', voice, '--', f'locale-{locale}']
         assert 'error' in speak('missing locale')
-        assert 'error' in speak('unsupported locale', locale='ja_JP')
+        assert 'error' in speak('unsupported locale', locale='fr_FR')
         assert 'error' in speak('   ', locale='en_US')
         assert 'error' in speak('invalid speed', locale='en_US', speed=0)
 

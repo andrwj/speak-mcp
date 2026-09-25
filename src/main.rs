@@ -9,7 +9,7 @@ use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::process::Command;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[cfg(target_os = "macos")]
 mod speech_queue;
@@ -41,58 +41,17 @@ struct SpeakerInfo {
     styles: Vec<StyleInfo>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 struct AppConfig {
     voicevox_default_speaker: Option<u32>,
     aivis_default_speaker: Option<u32>,
-    #[serde(rename = "en_US", default = "default_en_us_voice")]
-    en_us: String,
-    #[serde(rename = "en_AU", default = "default_en_au_voice")]
-    en_au: String,
-    #[serde(rename = "en_UK", default = "default_en_uk_voice")]
-    en_uk: String,
-    #[serde(rename = "ko_KR", default = "default_ko_kr_voice")]
-    ko_kr: String,
-}
-
-fn default_en_us_voice() -> String {
-    "Nathan (Enhanced)".to_string()
-}
-
-fn default_en_au_voice() -> String {
-    "Karen (Premium)".to_string()
-}
-
-fn default_en_uk_voice() -> String {
-    "Jamie (Enhanced)".to_string()
-}
-
-fn default_ko_kr_voice() -> String {
-    "Yuna (Premium)".to_string()
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            voicevox_default_speaker: None,
-            aivis_default_speaker: None,
-            en_us: default_en_us_voice(),
-            en_au: default_en_au_voice(),
-            en_uk: default_en_uk_voice(),
-            ko_kr: default_ko_kr_voice(),
-        }
-    }
+    #[serde(default)]
+    locale: HashMap<String, String>,
 }
 
 impl AppConfig {
     fn voice_for_locale(&self, locale: &str) -> Option<&str> {
-        match locale {
-            "en_US" => Some(&self.en_us),
-            "en_AU" => Some(&self.en_au),
-            "en_UK" => Some(&self.en_uk),
-            "ko_KR" => Some(&self.ko_kr),
-            _ => None,
-        }
+        self.locale.get(locale).map(String::as_str)
     }
 }
 
@@ -310,15 +269,12 @@ async fn main() -> Result<()> {
     {
         tools.push(Tool {
             name: "speak".to_string(),
-                description: Some("Use when the user wants to hear a response spoken aloud. `locale` is required: choose exactly one of `en_US`, `en_AU`, `en_UK`, or `ko_KR` to match the response language. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
+                description: Some("Use when the user wants to hear a response spoken aloud. `locale` is required; use one of `en_US`, `en_AU`, `en_UK`, or `ko_KR` to match the response language. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
             input_schema: json!({
                 "type": "object",
                     "properties": {
                         "text": { "type": "string" },
-                        "locale": {
-                            "type": "string",
-                            "enum": ["en_US", "en_AU", "en_UK", "ko_KR"]
-                        },
+                        "locale": { "type": "string" },
                         "speed": { "type": "integer" }
                     },
                     "required": ["text", "locale"]
