@@ -13,7 +13,7 @@ help:
 	@printf '%s\n' 'Available targets:'
 	@printf '%s\n' '  make build        Build both speak-mcp and SpeakConfig.app.'
 	@printf '%s\n' '  make build-mcp    Build the release speak-mcp binary.'
-	@printf '%s\n' '  make config   Create the default locale voice configuration.'
+	@printf '%s\n' '  make config       Create the default locale voice configuration.'
 	@printf '%s\n' '  make build-app    Build and package SpeakConfig.app.'
 	@printf '%s\n' '  make install-mcp  Overwrite $(BINDIR)/speak-mcp with the release binary.'
 	@printf '%s\n' '  make install-app  Overwrite $(APP_DIR).'
