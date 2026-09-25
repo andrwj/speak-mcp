@@ -41,8 +41,10 @@ struct SpeakerInfo {
     styles: Vec<StyleInfo>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize)]
 struct AppConfig {
+    #[serde(default = "default_rate")]
+    rate: std::num::NonZeroU32,
     voicevox_default_speaker: Option<u32>,
     aivis_default_speaker: Option<u32>,
     #[serde(default)]
@@ -66,15 +68,13 @@ fn get_config_path() -> std::path::PathBuf {
     std::path::PathBuf::from(".config/speak-mcp/config.json")
 }
 
-fn load_config() -> AppConfig {
-    let path = get_config_path();
-    if let Ok(content) = fs::read_to_string(&path) {
-        if let Ok(config) = serde_json::from_str(&content) {
-            return config;
-        }
-    }
+fn default_rate() -> std::num::NonZeroU32 {
+    std::num::NonZeroU32::new(200).unwrap()
+}
 
-    AppConfig::default()
+fn load_config() -> Result<AppConfig> {
+    let path = get_config_path();
+    Ok(serde_json::from_str(&fs::read_to_string(&path)?)?)
 }
 
 async fn fetch_speakers(port: u16) -> Option<Vec<SpeakerInfo>> {
@@ -235,7 +235,7 @@ async fn call_voicevox_compatible(
 #[tokio::main]
 async fn main() -> Result<()> {
     let transport = stdio::StdioTransport::new();
-    let config = load_config();
+    let config = load_config()?;
 
     // Fetch speakers at startup
     // Note: We intentionally ignore errors here and fallback to default schema
@@ -275,7 +275,7 @@ async fn main() -> Result<()> {
                     "properties": {
                         "text": { "type": "string" },
                         "locale": { "type": "string" },
-                        "speed": { "type": "integer" }
+                        "speed": { "type": "integer", "minimum": 1, "description": "Words per minute. Overrides config.json rate; omit to use the configured rate (default 200)." }
                     },
                     "required": ["text", "locale"]
             }),

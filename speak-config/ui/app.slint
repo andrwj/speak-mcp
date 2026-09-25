@@ -1,13 +1,14 @@
-import { Button, VerticalBox, ComboBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Button, VerticalBox, ComboBox, HorizontalBox, ScrollView, LineEdit } from "std-widgets.slint";
 
 export struct VoiceRow { locale: string, voices: [string], identifiers: [string], selected: int }
 
 export component AppWindow inherits Window {
     title: "Speak MCP Configuration";
     preferred-width: 640px;
-    preferred-height: 520px;
+    preferred-height: 560px;
     min-width: 520px;
-    min-height: 480px;
+    min-height: 520px;
+    in-out property <string> rate-text: "200";
     in property <[VoiceRow]> voice-rows;
     callback voice-selected(int, int);
 
@@ -67,7 +68,7 @@ export component AppWindow inherits Window {
         Rectangle { height: 12px; }
         ScrollView {
             vertical-stretch: 1;
-            min-height: 156px;
+            min-height: 198px;
             VerticalBox {
                 padding: 0px;
                 spacing: 12px;
@@ -82,6 +83,15 @@ export component AppWindow inherits Window {
                         current-index: row.selected;
                         selected(value) => { root.voice-selected(index, self.current-index); }
                     }
+                }
+                HorizontalBox {
+                    height: 30px;
+                    padding: 0px;
+                    spacing: 16px;
+                    Text { text: "Rate (WPM)"; width: 100px; vertical-alignment: center; }
+                    LineEdit { text <=> root.rate-text; input-type: number; }
+                    Button { text: "−"; width: 32px; clicked => { root.rate-text = max(1, root.rate-text.to-float() - 1); } }
+                    Button { text: "+"; width: 32px; clicked => { root.rate-text = root.rate-text.to-float() + 1; } }
                 }
             }
         }

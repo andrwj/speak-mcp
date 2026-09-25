@@ -31,6 +31,7 @@ config:
 	@printf '%s\n' '{' \
 		'  "voicevox_default_speaker": null,' \
 		'  "aivis_default_speaker": null,' \
+		'  "rate": 190,' \
 		'  "locale": {' \
 		'    "en_US": "Nathan (Enhanced)",' \
 		'    "en_AU": "Karen (Premium)",' \

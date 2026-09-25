@@ -37,6 +37,19 @@ impl SpeechQueue {
                     },
                 };
                 let current = config.get_or_insert_with(super::load_config);
+                let current = match current {
+                    Ok(current) => current,
+                    Err(error) => {
+                        eprintln!(
+                            "Speech job {} failed: invalid configuration: {}",
+                            job.id, error
+                        );
+                        if receiver.is_empty() {
+                            config = None;
+                        }
+                        continue;
+                    }
+                };
                 let voice = current
                     .voice_for_locale(&job.args.locale)
                     .filter(|v| !v.trim().is_empty());
@@ -57,9 +70,9 @@ impl SpeechQueue {
                     .stderr(Stdio::inherit())
                     .kill_on_drop(true);
                 command.arg("-v").arg(voice);
-                if let Some(speed) = job.args.speed {
-                    command.arg("-r").arg(speed.to_string());
-                }
+                command
+                    .arg("-r")
+                    .arg(job.args.speed.unwrap_or(current.rate.get()).to_string());
                 command.arg("--").arg(job.args.text);
                 match command.spawn() {
                     Ok(mut child) => {

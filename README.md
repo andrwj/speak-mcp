@@ -62,7 +62,7 @@ Default server install path: `~/.local/bin/speak-mcp`. Other clients may use a d
 
 ### macOS Speech
 
-`speak` accepts required `text` and `locale` strings and an optional positive integer `speed` (words per minute). There is no `voice` argument or default locale.
+`speak` accepts required `text` and `locale` strings and an optional positive integer `speed` (words per minute). Explicit `speed` overrides the configuration's `rate`; omitting it uses `rate`, which defaults to 200 WPM when absent. Zero, negative, and non-integer rates are invalid. There is no `voice` argument or default locale.
 
 ```json
 {"text": "Hello, this is a speech test.", "locale": "en_US", "speed": 180}
@@ -74,6 +74,7 @@ The tool description lists `en_US`, `en_AU`, `en_UK`, and `ko_KR`. Voice selecti
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
+  "rate": 200,
   "locale": {
     "en_US": "Nathan (Enhanced)",
     "en_AU": "Karen (Premium)",
@@ -109,7 +110,7 @@ The **Engines** group retains the VOICEVOX and Aivis Speech speaker selectors in
 
 **Voice Settings** shows one dropdown per key in the configuration's `locale` object. Choices come from `say -v '?'`; `en_UK` uses the macOS `en_GB` voice list. Language annotations are hidden in the dropdown labels, while quality labels such as `(Premium)` and `(Enhanced)` remain. The original voice name is retained for saving and playback. A configured voice that is not installed remains visible until you choose a replacement.
 
-**Save Settings** writes the selected voices and engine speaker IDs to the configuration file. **Refresh** reloads the file and both engine and macOS voice lists, discarding unsaved selections. Status messages appear beside the buttons when needed.
+**Rate (WPM)** appears below the last locale and sets the common speaking rate using a numeric field and increment/decrement buttons. **Save Settings** writes the selected voices, rate, and engine speaker IDs to the configuration file. **Refresh** reloads these values and both engine and macOS voice lists, discarding unsaved changes. Voice and rate changes take effect together at the next playback batch. Status messages appear beside the buttons when needed.
 
 ```bash
 open /Applications/SpeakConfig.app

@@ -23,8 +23,10 @@ struct SpeakerInfo {
     styles: Vec<StyleInfo>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct AppConfig {
+    #[serde(default = "default_rate")]
+    rate: std::num::NonZeroU32,
     voicevox_default_speaker: Option<u32>,
     aivis_default_speaker: Option<u32>,
     #[serde(default)]
@@ -37,6 +39,10 @@ struct AppState {
     voicevox_options: Vec<(String, u32)>, // (Display Name, ID)
     aivis_options: Vec<(String, u32)>,
     config: AppConfig,
+}
+
+fn default_rate() -> std::num::NonZeroU32 {
+    std::num::NonZeroU32::new(200).unwrap()
 }
 
 fn get_config_path() -> PathBuf {
@@ -65,6 +71,7 @@ fn save_config_to_file(config: &AppConfig) -> Result<()> {
     println!("Saving config to: {:?}", path);
 
     let mut current = load_config()?;
+    current.rate = config.rate;
     current.voicevox_default_speaker = config.voicevox_default_speaker;
     current.aivis_default_speaker = config.aivis_default_speaker;
     for (locale, voice) in &config.locale {
@@ -162,6 +169,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rate_defaults_and_rejects_invalid_values() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.rate.get(), 200);
+        for value in ["0", "-1", "1.5", "null", "\"fast\""] {
+            assert!(serde_json::from_str::<AppConfig>(&format!("{{\"rate\":{value}}}")).is_err());
+        }
+        let config: AppConfig = serde_json::from_str("{\"rate\":250}").unwrap();
+        assert_eq!(serde_json::to_value(config).unwrap()["rate"], 250);
+    }
+
+    #[test]
     fn labels_hide_language_but_keep_quality_and_identifiers() {
         assert_eq!(voice_label("Eddy (Korean (South Korea))"), "Eddy");
         assert_eq!(voice_label("Flo (English (UK))"), "Flo");
@@ -204,6 +222,7 @@ fn refresh_voices(window: &AppWindow, state: &Arc<Mutex<AppState>>) {
         }
     };
     let state = state.lock().unwrap();
+    window.set_rate_text(state.config.rate.to_string().into());
     let mut locales: Vec<_> = state.config.locale.iter().collect();
     locales.sort_by_key(|(locale, _)| *locale);
     let rows = locales
@@ -296,6 +315,16 @@ fn main() -> Result<()> {
     main_window.on_save_config(move |vv_idx, aivis_idx| {
         let main_window = main_window_weak.unwrap();
         let mut state = state_weak.lock().unwrap();
+
+        let Ok(rate) = main_window
+            .get_rate_text()
+            .trim()
+            .parse::<std::num::NonZeroU32>()
+        else {
+            main_window.set_status_message("Rate must be a positive whole number.".into());
+            return;
+        };
+        state.config.rate = rate;
 
         let vv_id = if vv_idx >= 0 && (vv_idx as usize) < state.voicevox_options.len() {
             Some(state.voicevox_options[vv_idx as usize].1)

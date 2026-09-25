@@ -115,7 +115,7 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
             assert 'result' in speak(f'locale-{locale}', locale=locale)
             wait_for(lambda: any(e['event'] == 'start' and e['text'] == f'locale-{locale}' for e in events()))
             event = next(e for e in events() if e['event'] == 'start' and e['text'] == f'locale-{locale}')
-            assert event['args'] == ['-v', voice, '--', f'locale-{locale}']
+            assert event['args'] == ['-v', voice, '-r', '200', '--', f'locale-{locale}']
         assert 'error' in speak('missing locale')
         assert 'result' in speak('unsupported locale', locale='fr_FR')
         assert 'error' in speak('   ', locale='en_US')
@@ -126,15 +126,18 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
         config_path = config_dir / 'config.json'
         config = json.loads(config_path.read_text())
         config['locale']['en_US'] = 'Updated Voice'
+        config['rate'] = 240
         config_path.write_text(json.dumps(config))
         assert 'result' in speak('batch-second', locale='en_US')
         wait_for(lambda: any(e['event'] == 'end' and e['text'] == 'batch-second' for e in events()))
         second = next(e for e in events() if e['event'] == 'start' and e['text'] == 'batch-second')
         assert second['args'][1] == 'Nathan (Enhanced)', second
+        assert second['args'][3] == '200', second
         time.sleep(0.1)
         assert 'result' in speak('hold', locale='en_US')
         wait_for(lambda: any(e['text'] == 'hold' for e in events()))
         assert events()[-1]['args'][1] == 'Updated Voice'
+        assert events()[-1]['args'][3] == '240'
         child_pid = events()[-1]['pid']
         for i in range(64):
             assert 'result' in speak(f'pending-{i}', locale='en_US')
