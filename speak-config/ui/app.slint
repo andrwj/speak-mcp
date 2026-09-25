@@ -1,9 +1,15 @@
-import { Button, VerticalBox, ComboBox, HorizontalBox, LineEdit } from "std-widgets.slint";
+import { Button, VerticalBox, ComboBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+
+export struct VoiceRow { locale: string, voices: [string], identifiers: [string], selected: int }
 
 export component AppWindow inherits Window {
     title: "Speak MCP Configuration";
-    width: 500px;
-    height: 250px;
+    preferred-width: 640px;
+    preferred-height: 520px;
+    min-width: 520px;
+    min-height: 480px;
+    in property <[VoiceRow]> voice-rows;
+    callback voice-selected(int, int);
 
     in-out property <[string]> voicevox_model: ["Loading..."];
     in-out property <int> voicevox_index: 0;
@@ -11,42 +17,88 @@ export component AppWindow inherits Window {
     in-out property <[string]> aivis_model: ["Loading..."];
     in-out property <int> aivis_index: 0;
     
-    in-out property <string> status_message: "Ready";
+    in-out property <string> status_message: "";
     
     callback save_config(int, int); 
     callback refresh_speakers();
 
     VerticalBox {
-        Text {
-            text: "VOICEVOX";
-            font-size: 13px;
-        }
+        padding: 24px;
+        spacing: 0px;
+        Text { text: "Engines"; font-size: 16px; height: 24px; }
+        Rectangle { height: 12px; }
         HorizontalBox {
-            alignment: start;
-            ComboBox {
+            height: 56px;
+            padding: 0px;
+            spacing: 24px;
+            VerticalBox {
+              padding: 0px;
+              spacing: 6px;
+              Text { text: "VOICEVOX"; font-size: 13px; height: 20px; }
+              ComboBox {
+                height: 30px;
                 model: root.voicevox_model;
                 current-index <=> root.voicevox_index;
-                width: 200px;
+              }
             }
-        }
-
-        Rectangle { height: 10px; }
-
-        Text {
-            text: "Aivis Speech";
-            font-size: 13px;
-        }
-        HorizontalBox {
-            alignment: start;
-            ComboBox {
+            VerticalBox {
+              padding: 0px;
+              spacing: 6px;
+              Text { text: "Aivis Speech"; font-size: 13px; height: 20px; }
+              ComboBox {
+                height: 30px;
                 model: root.aivis_model;
                 current-index <=> root.aivis_index;
-                width: 200px;
+              }
             }
         }
 
+        Rectangle {
+            height: 49px;
+            Rectangle {
+                x: parent.width * 0.05;
+                y: 24px;
+                width: parent.width * 0.9;
+                height: 1px;
+                background: #808080;
+            }
+        }
+        Text { text: "Voice Settings"; font-size: 16px; height: 24px; }
+        Rectangle { height: 12px; }
+        ScrollView {
+            vertical-stretch: 1;
+            min-height: 156px;
+            VerticalBox {
+                padding: 0px;
+                spacing: 12px;
+                alignment: start;
+                for row[index] in root.voice-rows: HorizontalBox {
+                    height: 30px;
+                    padding: 0px;
+                    spacing: 16px;
+                    Text { text: row.locale; width: 100px; vertical-alignment: center; }
+                    ComboBox {
+                        model: row.voices;
+                        current-index: row.selected;
+                        selected(value) => { root.voice-selected(index, self.current-index); }
+                    }
+                }
+            }
+        }
+
+        Rectangle { height: 20px; }
         HorizontalBox {
+            height: 32px;
+            padding: 0px;
+            spacing: 12px;
             alignment: end;
+            Text {
+                text: root.status_message;
+                horizontal-stretch: 1;
+                min-width: 0px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
             Button {
                 text: "Refresh";
                 clicked => { root.refresh_speakers(); }
@@ -60,9 +112,5 @@ export component AppWindow inherits Window {
             }
         }
         
-        Text {
-            text: root.status_message;
-            horizontal-alignment: center;
-        }
     }
 }
