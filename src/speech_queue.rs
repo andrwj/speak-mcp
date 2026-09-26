@@ -72,7 +72,7 @@ impl SpeechQueue {
                 command.arg("-v").arg(voice);
                 command
                     .arg("-r")
-                    .arg(job.args.speed.unwrap_or(current.rate.get()).to_string());
+                    .arg(job.args.rate.unwrap_or(current.rate.get()).to_string());
                 command.arg("--").arg(job.args.text);
                 match command.spawn() {
                     Ok(mut child) => {
@@ -116,8 +116,8 @@ impl SpeechQueue {
         if args.text.trim().is_empty() {
             bail!("Speech text must not be empty");
         }
-        if args.speed == Some(0) {
-            bail!("Speech speed must be greater than zero");
+        if args.rate == Some(0) {
+            bail!("Speech rate must be greater than zero");
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.sender

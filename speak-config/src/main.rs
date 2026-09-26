@@ -42,7 +42,7 @@ struct AppState {
 }
 
 fn default_rate() -> std::num::NonZeroU32 {
-    std::num::NonZeroU32::new(200).unwrap()
+    std::num::NonZeroU32::new(185).unwrap()
 }
 
 fn get_config_path() -> PathBuf {
@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn rate_defaults_and_rejects_invalid_values() {
         let config: AppConfig = serde_json::from_str("{}").unwrap();
-        assert_eq!(config.rate.get(), 200);
+        assert_eq!(config.rate.get(), 185);
         for value in ["0", "-1", "1.5", "null", "\"fast\""] {
             assert!(serde_json::from_str::<AppConfig>(&format!("{{\"rate\":{value}}}")).is_err());
         }

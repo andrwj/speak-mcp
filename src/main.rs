@@ -18,8 +18,9 @@ mod stdio;
 #[derive(Debug, Deserialize, Serialize)]
 struct SpeakArgs {
     text: String,
+    #[serde(default = "default_locale")]
     locale: String,
-    speed: Option<u32>,
+    rate: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -68,8 +69,12 @@ fn get_config_path() -> std::path::PathBuf {
     std::path::PathBuf::from(".config/speak-mcp/config.json")
 }
 
+fn default_locale() -> String {
+    "en_US".to_string()
+}
+
 fn default_rate() -> std::num::NonZeroU32 {
-    std::num::NonZeroU32::new(200).unwrap()
+    std::num::NonZeroU32::new(185).unwrap()
 }
 
 fn load_config() -> Result<AppConfig> {
@@ -269,15 +274,26 @@ async fn main() -> Result<()> {
     {
         tools.push(Tool {
             name: "speak".to_string(),
-                description: Some("Use when the user wants to hear a response spoken aloud. `locale` is required; use one of `en_US`, `en_AU`, `en_UK`, or `ko_KR` to match the response language. Queue speech using macOS say; this non-blocking tool returns immediately after acceptance, before playback finishes. For long responses, call the tool with one paragraph or a small group of paragraphs at a time rather than the entire response at once. Jobs play sequentially in FIFO order.".to_string()),
+            description: Some("Read text aloud using macOS text-to-speech. Use this tool when the user asks to hear text or a response spoken aloud.\n\nOnly \"text\" is required. Pass the actual words to speak as a plain string.\n\"locale\" is optional. If omitted, the server uses \"en_US\".\nFor Korean text, set \"locale\" to \"ko_KR\".\nFor English text, omit \"locale\" or use \"en_US\", \"en_AU\", or \"en_UK\".\n\"rate\" is optional and sets the speech rate in words per minute. Omit it to use the configured rate. The default is 185.\n\nExample arguments: {\"text\": \"Hello.\"}\nKorean example: {\"text\": \"안녕하세요.\", \"locale\": \"ko_KR\"}\n\nFor long text, make separate calls in reading order, with one paragraph per call.\nCalls are queued and played in order. A successful result means the text was queued; playback may still be in progress.".to_string()),
             input_schema: json!({
-                "type": "object",
+                    "type": "object",
                     "properties": {
-                        "text": { "type": "string" },
-                        "locale": { "type": "string" },
-                        "speed": { "type": "integer", "minimum": 1, "description": "Words per minute. Overrides config.json rate; omit to use the configured rate (default 200)." }
+                        "text": {
+                            "type": "string",
+                            "description": "Required. The actual text to read aloud."
+                        },
+                        "locale": {
+                            "type": "string",
+                            "default": "en_US",
+                            "description": "Optional. Omit for US English (en_US). Use ko_KR for Korean, en_AU for Australian English, or en_UK for British English."
+                        },
+                        "rate": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Optional. Speech rate in words per minute. Overrides config.json rate; omit to use the configured rate (default 185)."
+                        }
                     },
-                    "required": ["text", "locale"]
+                    "required": ["text"]
             }),
             output_schema: None,
         });

@@ -86,15 +86,19 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
         assert 'result' in tools_response
         speak_tool = next(tool for tool in tools_response['result']['tools'] if tool['name'] == 'speak')
         schema = speak_tool['inputSchema']
-        assert schema['required'] == ['text', 'locale']
-        assert schema['properties']['locale'] == {'type': 'string'}
+        assert schema['required'] == ['text']
+        assert schema['properties']['locale']['default'] == 'en_US'
+        assert 'speed' not in schema['properties']
+        assert schema['properties']['rate']['minimum'] == 1
+        for name in ('text', 'locale', 'rate'):
+            assert schema['properties'][name]['description']
         assert 'voice' not in schema['properties']
         for params in ({}, {'cursor': 'test'}):
             assert 'result' in request('tools/list', params)
 
         ids = []
         for text in ('first', 'fail', 'last'):
-            response = speak(text, locale='en_AU', speed=180)
+            response = speak(text, locale='en_AU', rate=180)
             accepted = json.loads(response['result']['content'][0]['text'])
             assert accepted['status'] == 'queued', response
             ids.append(accepted['job_id'])
@@ -115,11 +119,14 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
             assert 'result' in speak(f'locale-{locale}', locale=locale)
             wait_for(lambda: any(e['event'] == 'start' and e['text'] == f'locale-{locale}' for e in events()))
             event = next(e for e in events() if e['event'] == 'start' and e['text'] == f'locale-{locale}')
-            assert event['args'] == ['-v', voice, '-r', '200', '--', f'locale-{locale}']
-        assert 'error' in speak('missing locale')
+            assert event['args'] == ['-v', voice, '-r', '185', '--', f'locale-{locale}']
+        assert 'result' in speak('missing locale')
+        wait_for(lambda: any(e['event'] == 'end' and e['text'] == 'missing locale' for e in events()))
+        default_event = next(e for e in events() if e['event'] == 'start' and e['text'] == 'missing locale')
+        assert default_event['args'] == ['-v', 'Nathan (Enhanced)', '-r', '185', '--', 'missing locale']
         assert 'result' in speak('unsupported locale', locale='fr_FR')
         assert 'error' in speak('   ', locale='en_US')
-        assert 'error' in speak('invalid speed', locale='en_US', speed=0)
+        assert 'error' in speak('invalid rate', locale='en_US', rate=0)
 
         assert 'result' in speak('batch-first', locale='en_US')
         wait_for(lambda: any(e['event'] == 'start' and e['text'] == 'batch-first' for e in events()))
@@ -132,7 +139,7 @@ sys.exit(1 if sys.argv[-1] == 'fail' else 0)
         wait_for(lambda: any(e['event'] == 'end' and e['text'] == 'batch-second' for e in events()))
         second = next(e for e in events() if e['event'] == 'start' and e['text'] == 'batch-second')
         assert second['args'][1] == 'Nathan (Enhanced)', second
-        assert second['args'][3] == '200', second
+        assert second['args'][3] == '185', second
         time.sleep(0.1)
         assert 'result' in speak('hold', locale='en_US')
         wait_for(lambda: any(e['text'] == 'hold' for e in events()))

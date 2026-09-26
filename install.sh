@@ -93,7 +93,7 @@ if [ ! -f "$CONFIG_PATH" ]; then
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
-  "rate": 200,
+  "rate": 185,
   "locale": {
     "en_US": "Nathan (Enhanced)",
     "en_AU": "Karen (Premium)",

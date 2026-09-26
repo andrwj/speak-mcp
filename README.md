@@ -56,16 +56,16 @@ Default server install path: `~/.local/bin/speak-mcp`. Other clients may use a d
 
 | Tool             | Description                                               |
 | ---------------- | --------------------------------------------------------- |
-| `speak`          | Queued macOS speech using a required locale (macOS only). |
+| `speak`          | Queued macOS speech with an optional locale (macOS only). |
 | `speak_voicevox` | VOICEVOX TTS                                              |
 | `speak_aivis`    | Aivis Speech TTS                                          |
 
 ### macOS Speech
 
-`speak` accepts required `text` and `locale` strings and an optional positive integer `speed` (words per minute). Explicit `speed` overrides the configuration's `rate`; omitting it uses `rate`, which defaults to 200 WPM when absent. Zero, negative, and non-integer rates are invalid. There is no `voice` argument or default locale.
+`speak` requires only a `text` string. The optional `locale` string defaults to `en_US` when omitted. An optional positive integer `rate` (words per minute) overrides the configuration's `rate`; omitting it uses the configured rate, which defaults to 185 WPM when absent. Zero, negative, and non-integer rates are invalid. There is no `voice` argument.
 
 ```json
-{"text": "Hello, this is a speech test.", "locale": "en_US", "speed": 180}
+{"text": "Hello, this is a speech test.", "locale": "en_US", "rate": 180}
 ```
 
 The tool description lists `en_US`, `en_AU`, `en_UK`, and `ko_KR`. Voice selection comes exclusively from the `locale` object in `~/.config/speak-mcp/config.json`, not a built-in voice mapping. `make config` creates:
@@ -74,7 +74,7 @@ The tool description lists `en_US`, `en_AU`, `en_UK`, and `ko_KR`. Voice selecti
 {
   "voicevox_default_speaker": null,
   "aivis_default_speaker": null,
-  "rate": 200,
+  "rate": 185,
   "locale": {
     "en_US": "Nathan (Enhanced)",
     "en_AU": "Karen (Premium)",
